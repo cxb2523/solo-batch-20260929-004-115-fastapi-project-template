@@ -68,10 +68,12 @@ def cli_client():
 
 
 def remove_db():
+    # Release pooled connections so the file is not locked (Windows)
+    db.engine.dispose()
     # Remove the database file
     try:
         os.remove("testing.db")
-    except FileNotFoundError:
+    except (FileNotFoundError, PermissionError):
         pass
 
 

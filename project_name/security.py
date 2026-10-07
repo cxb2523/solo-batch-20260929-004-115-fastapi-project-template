@@ -5,8 +5,10 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from pydantic import BaseModel
-from sqlmodel import Field, Relationship, Session, SQLModel
+from pydantic import BaseModel, field_validator
+from pydantic_core import core_schema
+from sqlalchemy.orm import selectinload
+from sqlmodel import Field, Relationship, Session, SQLModel, select
 
 from project_name.models.content import Content, ContentResponse
 
@@ -46,11 +48,10 @@ class HashedPassword(str):
     """
 
     @classmethod
-    def __get_validators__(cls):
-        # one or more validators may be yielded which will be called in the
-        # order to validate the input, each validator will receive as an input
-        # the value returned from the previous validator
-        yield cls.validate
+    def __get_pydantic_core_schema__(cls, source, handler):
+        return core_schema.no_info_before_validator_function(
+            cls.validate, core_schema.str_schema()
+        )
 
     @classmethod
     def validate(cls, v):
@@ -75,6 +76,15 @@ class User(SQLModel, table=True):
 
     # it populates the .user attribute on the Content Model
     contents: List["Content"] = Relationship(back_populates="user")
+
+    @field_validator("password", mode="before")
+    @classmethod
+    def _hash_plain_password(cls, value):
+        # SQLModel table models bypass the custom type schema of
+        # HashedPassword, so hashing is enforced here instead.
+        if isinstance(value, str) and not value.startswith("$2"):
+            return get_password_hash(value)
+        return value
 
 
 class UserResponse(BaseModel):
@@ -152,7 +162,12 @@ def authenticate_user(
 
 def get_user(username) -> Optional[User]:
     with Session(engine) as session:
-        return session.query(User).where(User.username == username).first()
+        # eager load contents so the detached instance can be serialized
+        return session.exec(
+            select(User)
+            .where(User.username == username)
+            .options(selectinload(User.contents))
+        ).first()
 
 
 def get_current_user(

@@ -43,6 +43,10 @@ test: lint        ## Run tests and generate coverage report.
 	$(ENV_PREFIX)coverage xml
 	$(ENV_PREFIX)coverage html
 
+.PHONY: run
+run:              ## Run the API server.
+	$(ENV_PREFIX)python -m project_name run
+
 .PHONY: watch
 watch:            ## Run tests on every change.
 	ls **/**.py | entr $(ENV_PREFIX)pytest --picked=first -s -vvv -l --tb=long --maxfail=1 tests/

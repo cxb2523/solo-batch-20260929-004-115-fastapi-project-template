@@ -38,6 +38,8 @@ async def create_user(*, session: Session = ActiveSession, user: UserCreate):
         raise HTTPException(status_code=422, detail="Username already exists")
 
     db_user = User.from_orm(user)
+    # Table-model construction bypasses validation, so hash explicitly
+    db_user.password = get_password_hash(user.password)
     session.add(db_user)
     session.commit()
     session.refresh(db_user)
